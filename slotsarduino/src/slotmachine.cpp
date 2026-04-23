@@ -1,11 +1,12 @@
 #include <WiFiS3.h>
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+// #include <LiquidCrystal_I2C.h>
 #include <Firebase.h>
 #include <ArduinoJson.h>
+#include <rgb_lcd.h>
 #include "secrets.h"
 
-LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 16, 2);
+rgb_lcd lcd;
 
 Firebase fb(REFERENCE_URL, AUTH_TOKEN);
 
@@ -57,8 +58,8 @@ void playNote()
 {
 
   // uncomment top line for actual hardware, bottom line for emulator
-  // if (millis() - timeSinceNote >= 1300)
-  if (millis() - timeSinceNote >= 520)
+  //if (millis() - timeSinceNote >= 520)
+  if (millis() - timeSinceNote >= 1300)
   {
     timeSinceNote = millis();
     tone(5, melody[thisNote % 16], 200);
@@ -87,8 +88,8 @@ void setup()
   // rng (dont touch a0 pin)
   randomSeed(analogRead(0));
   pinMode(buttonPin, INPUT_PULLUP);
-  lcd.init();
-  lcd.backlight();
+  lcd.begin(16,2);
+  lcd.setRGB(255, 0 ,255);
   Serial.begin(9600);
 
   lcd.print("Connecting...");
