@@ -7,7 +7,7 @@
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 16, 2);
 
-Firebase fb(REFERENCE_URL);
+Firebase fb(REFERENCE_URL, AUTH_TOKEN);
 
 const int buttonPin = 2;
 
@@ -16,11 +16,55 @@ int lastSteadyState = LOW;          // the previous steady state from the input 
 int lastFlickerableState = LOW;     // the previous flickerable state from the input pin
 int currentState;                   // the current reading from the input pin
 unsigned long lastDebounceTime = 0; // the last time the output pin was toggled
+unsigned long timeSinceNote = 0;
 int slotVals[3] = {-1, -1, -1};
 int money = 0;
+String outputBuffer[6];
+int outputBufferIndex = 0;
+
+unsigned int thisNote = 0;
+#define NOTE_CS5 554
+#define NOTE_DS5 622
+#define NOTE_E5 659
+#define NOTE_GS5 831
+#define NOTE_A5 880
+#define NOTE_CS6 1109
+#define NOTE_DS6 1245
+#define NOTE_E6 1319
+
+int melody[] = {
+    NOTE_E6,
+    NOTE_E6,
+    NOTE_E6,
+    NOTE_E5,
+    NOTE_DS6,
+    NOTE_DS6,
+    NOTE_DS6,
+    NOTE_DS5,
+    NOTE_CS6,
+    NOTE_CS6,
+    NOTE_CS6,
+    NOTE_CS5,
+    NOTE_A5,
+    NOTE_A5,
+    NOTE_GS5,
+    NOTE_E6,
+};
+
 JsonDocument docOutput;
 
+void playNote()
+{
 
+  // uncomment top line for actual hardware, bottom line for emulator
+  // if (millis() - timeSinceNote >= 1300)
+  if (millis() - timeSinceNote >= 520)
+  {
+    timeSinceNote = millis();
+    tone(5, melody[thisNote % 16], 200);
+    thisNote++;
+  }
+}
 int GetRandom(int position)
 {
   int ranNum;
@@ -47,6 +91,7 @@ void setup()
   lcd.backlight();
   Serial.begin(9600);
 
+  lcd.print("Connecting...");
   Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED)
@@ -55,10 +100,26 @@ void setup()
     Serial.print(".");
   }
   Serial.println(" Connected!");
+
+  lcd.clear();
+  lcd.print("Calculating debt..");
+  int responseCode = fb.getInt("money", money);
+  if (responseCode != 200)
+  {
+    lcd.clear();
+    lcd.print("Cannot connect, starting fresh");
+    delay(2000);
+    money = 0;
+  }
+
+  lcd.clear();
 }
 
 void loop()
 {
+  // music
+  playNote();
+
   // animation
   // do this in a for loop
   if (slotVals[0] == -1)
@@ -106,7 +167,6 @@ void loop()
       else if (slotVals[2] == -1)
       {
         slotVals[2] = GetRandom(2);
-        
 
         // the moneycounter 3000
         int counter = 0;
@@ -118,8 +178,6 @@ void loop()
           }
         }
         lcd.setCursor(0, 1);
-
-
 
         if (counter == 0)
         {
@@ -150,7 +208,7 @@ void loop()
           docOutput["money"] = money;
           // Firebase.setInt(firebaseData, "/"+String(postId)+"/slotResults", 2);
         }
-        else if (counter == 3)
+        else
         {
           lcd.print("JACKPOT JACKPOT!");
           money += 200;
@@ -163,12 +221,26 @@ void loop()
       }
       else
       {
-        lcd.setCursor(0, 1);
-        lcd.print("Uploading data........");
         docOutput.shrinkToFit();
         String output;
         serializeJson(docOutput, output);
-        fb.pushJson("SlotsTest", output);
+        if (outputBufferIndex < 6)
+        {
+          outputBuffer[outputBufferIndex] = output;
+          outputBufferIndex++;
+        }
+        else
+        {
+          // buffer is full, upload all data and reset buffer
+          lcd.setCursor(0, 1);
+          lcd.print("Take a break!");
+          for (int i = 0; i < 6; i++)
+          {
+            fb.setInt("money", money);
+            fb.pushJson("SlotsProd", outputBuffer[i]);
+          }
+          outputBufferIndex = 0;
+        }
         // reset vals
         slotVals[0] = -1;
         slotVals[1] = -1;
@@ -176,7 +248,6 @@ void loop()
         lcd.clear();
       }
     }
-
     // save the the last steady state for button press
     lastSteadyState = currentState;
   }
